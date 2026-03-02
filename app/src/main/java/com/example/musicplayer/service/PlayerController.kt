@@ -7,8 +7,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.example.musicplayer.domain.model.PlayerState
 import com.example.musicplayer.domain.model.PlaybackMode
 import com.example.musicplayer.domain.model.Song
-import com.example.musicplayer.domain.model.Resource // ← Import add kiya
-import com.example.musicplayer.domain.repository.MusicRepository // ← Import add kiya
+import com.example.musicplayer.domain.model.Resource
+import com.example.musicplayer.domain.repository.MusicRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,7 +27,7 @@ import javax.inject.Singleton
 @Singleton
 class PlayerController @Inject constructor(
     private val player: ExoPlayer,
-    private val musicRepository: MusicRepository // ← Constructor mein inject kiya
+    private val musicRepository: MusicRepository
 ) {
     private val _playerState = MutableStateFlow(PlayerState())
     val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
@@ -48,7 +48,11 @@ class PlayerController @Inject constructor(
                             it.copy(duration = player.duration.coerceAtLeast(0L))
                         }
                     }
-                    Player.STATE_ENDED -> stopProgressTracking()
+                    Player.STATE_ENDED -> {
+                        stopProgressTracking()
+                        // 👇 NAYA CALL: Check karo ki endless playback shuru karna hai ya nahi
+                        checkAndPlaySimilarSongs()
+                    }
                     else -> {}
                 }
             }
@@ -201,6 +205,45 @@ class PlayerController @Inject constructor(
     fun release() {
         stopProgressTracking()
         scope.cancel()
+    }
+
+    // 👇 NAYA FUNCTION: Endless Playback Logic 👇
+    private fun checkAndPlaySimilarSongs() {
+        // Agar player kisi repeat mode me nahi hai aur hum aakhri gaane par hain
+        if (player.repeatMode != Player.REPEAT_MODE_ALL &&
+            player.repeatMode != Player.REPEAT_MODE_ONE &&
+            player.currentMediaItemIndex == player.mediaItemCount - 1) {
+
+            val currentSong = _playerState.value.currentSong ?: return
+
+            _playerState.update { it.copy(isLoading = true) }
+
+            scope.launch {
+                musicRepository.getSimilarSongs(currentSong).collect { result ->
+                    if (result is Resource.Success && !result.data.isNullOrEmpty()) {
+                        val similarSongs = result.data
+
+                        // 1. Naye gaano ko player me piche jod do
+                        similarSongs.forEach { song ->
+                            player.addMediaItem(song.toMediaItem())
+                        }
+
+                        // 2. Apni current queue list ko update kar do
+                        val updatedQueue = _playerState.value.queue + similarSongs
+                        _playerState.update { it.copy(queue = updatedQueue, isLoading = false) }
+
+                        // 3. Player ko agla gaana bajane ka signal do
+                        if (player.hasNextMediaItem()) {
+                            player.seekToNextMediaItem()
+                            player.prepare()
+                            player.play()
+                        }
+                    } else {
+                        _playerState.update { it.copy(isLoading = false) }
+                    }
+                }
+            }
+        }
     }
 
     private fun Song.toMediaItem(): MediaItem {

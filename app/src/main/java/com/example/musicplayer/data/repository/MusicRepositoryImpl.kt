@@ -68,7 +68,6 @@ class MusicRepositoryImpl @Inject constructor(
 
             val response = api.getLrcLibLyrics(trackName = cleanTitle, artistName = cleanArtist)
 
-            // 👇 FIXED: Ab pehle Synced (Chalti hui) lyrics uthayega, agar nahi mila tab Plain uthayega
             val finalLyrics = response.syncedLyrics ?: response.plainLyrics
 
             if (!finalLyrics.isNullOrBlank()) {
@@ -78,6 +77,29 @@ class MusicRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             emit(Resource.Error("Lyrics nahi mile (LRCLIB)"))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    // 👇 NAYA LOGIC: Similar Songs (Endless Playback ke liye) 👇
+    override suspend fun getSimilarSongs(song: Song): Flow<Resource<List<Song>>> = flow {
+        emit(Resource.Loading())
+        try {
+            // Hum gaane ke artist se naye gaane dhoondhenge taaki vibe match kare
+            val query = song.artist?.split(",")?.first()?.trim() ?: song.title
+            val response = api.searchSongs(query, page = 0, limit = 15)
+            val data = response.data
+
+            if (response.success && data != null) {
+                val similarSongs = data.results
+                    .map { it.toDomain() }
+                    .filter { it.id != song.id } // Purana gaana dobara na aaye
+
+                emit(Resource.Success(similarSongs))
+            } else {
+                emit(Resource.Error("Naye gaane nahi mile"))
+            }
+        } catch (e: Exception) {
+            emit(Resource.Error(e.localizedMessage ?: "Network error"))
         }
     }.flowOn(Dispatchers.IO)
 }

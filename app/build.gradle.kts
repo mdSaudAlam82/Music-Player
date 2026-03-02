@@ -24,7 +24,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // ✅ FIX: App size chhota karne ke liye aur code secure karne ke liye
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -95,6 +97,5 @@ dependencies {
 
     debugImplementation(libs.androidx.ui.tooling)
     implementation("androidx.core:core-splashscreen:1.0.1")
-    implementation(libs.androidx.core.ktx)
     implementation("androidx.media:media:1.7.0")
 }

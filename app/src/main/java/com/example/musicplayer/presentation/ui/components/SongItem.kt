@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete // ✅ Naya import
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.MoreVert
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector // ✅ Naya import
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +38,8 @@ fun SongItem(
     onDownloadClick: ((Song) -> Unit)? = null,
     isDownloading: Boolean = false,
     trailingContent: @Composable (() -> Unit)? = null,
+    // 👇 Naya parameter: Default mein 3-dot hi dikhayega
+    moreIcon: ImageVector = Icons.Default.MoreVert,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -102,11 +106,11 @@ fun SongItem(
             }
         }
 
-        // More button
+        // 👇 Fixed Icon: Ab ye hamare 'moreIcon' parameter ka use karega
         IconButton(onClick = onMoreClick) {
             Icon(
-                imageVector = Icons.Default.MoreVert,
-                contentDescription = "More options",
+                imageVector = moreIcon,
+                contentDescription = "Options",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

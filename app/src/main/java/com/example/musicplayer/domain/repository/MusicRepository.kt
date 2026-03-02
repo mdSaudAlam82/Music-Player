@@ -18,6 +18,9 @@ interface MusicRepository {
 
     suspend fun getAlbumById(id: String): Flow<Resource<Album>>
 
-    // 👇 Yahan Title aur Artist kiya hai
+    // Yahan Title aur Artist kiya hai (LRCLIB ke liye)
     suspend fun getLyrics(title: String, artist: String): Flow<Resource<String>>
+
+    // 👇 NAYA: Endless playback ke liye Similar songs
+    suspend fun getSimilarSongs(song: Song): Flow<Resource<List<Song>>>
 }
