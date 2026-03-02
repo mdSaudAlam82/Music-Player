@@ -16,32 +16,26 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
+    // ✅ Wahi original URL jo aapke paas pehle chal raha tha
     private const val BASE_URL = "https://saavn.sumit.co/api/"
 
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = HttpLoggingInterceptor.Level.HEADERS
         }
         return OkHttpClient.Builder()
             .addInterceptor(logging)
-            // User-Agent interceptor — API block na kare
             .addInterceptor { chain ->
                 val request = chain.request().newBuilder()
-                    .addHeader(
-                        "User-Agent",
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    )
+                    .addHeader("User-Agent", "Mozilla/5.0")
                     .addHeader("Accept", "application/json")
                     .build()
                 chain.proceed(request)
             }
             .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
-            .followRedirects(true)
-            .followSslRedirects(true)
+            .readTimeout(60, TimeUnit.SECONDS)
             .build()
     }
 

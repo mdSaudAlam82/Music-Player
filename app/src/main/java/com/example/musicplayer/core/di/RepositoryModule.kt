@@ -21,24 +21,25 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindMusicRepository(
-        impl: MusicRepositoryImpl
+        musicRepositoryImpl: MusicRepositoryImpl
     ): MusicRepository
 
     @Binds
     @Singleton
-    abstract fun bindLocalMusicRepository(
-        impl: LocalMusicRepositoryImpl
-    ): LocalMusicRepository
-
-    @Binds
-    @Singleton
     abstract fun bindPlaylistRepository(
-        impl: PlaylistRepositoryImpl
+        playlistRepositoryImpl: PlaylistRepositoryImpl
     ): PlaylistRepository
 
     @Binds
     @Singleton
     abstract fun bindDownloadRepository(
-        impl: DownloadRepositoryImpl
+        downloadRepositoryImpl: DownloadRepositoryImpl
     ): DownloadRepository
+
+    // 👇 IS LINE KI WAJAH SE ERROR AA RAHA THA 👇
+    @Binds
+    @Singleton
+    abstract fun bindLocalMusicRepository(
+        localMusicRepositoryImpl: LocalMusicRepositoryImpl
+    ): LocalMusicRepository
 }

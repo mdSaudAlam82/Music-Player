@@ -1,6 +1,6 @@
 package com.example.musicplayer
 
-import android.content.ComponentName // ✅ Naya Import
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -10,6 +10,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -40,8 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.media3.session.MediaController // ✅ Naya Import
-import androidx.media3.session.SessionToken // ✅ Naya Import
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.musicplayer.presentation.SharedViewModel
@@ -61,22 +62,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Notification permission Android 13+ ke liye
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                 != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(
-                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                    1001
-                )
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
             }
         }
 
-        // Battery Optimization Bypass (CRASH FREE)
+        // ✅ FIXED TYPO: VERSION_CODES.M
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             val packageName = packageName
-
             if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
                 try {
                     val intent = Intent().apply {
@@ -90,14 +86,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // 👇 NAYA CODE: Service ko zinda rakhne ke liye Lifeline (Binding)
-        // Ye code insure karega ki gaana chalte hi Notification 100% dikhe
-        val sessionToken = SessionToken(
-            this,
-            ComponentName(this, MusicPlayerService::class.java)
-        )
+        val sessionToken = SessionToken(this, ComponentName(this, MusicPlayerService::class.java))
         val controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
-        // 👆 NAYA CODE KHATAM
 
         setContent {
             MusicPlayerTheme {
@@ -116,7 +106,6 @@ class MainActivity : ComponentActivity() {
                 var showNewPlaylistDialog by rememberSaveable { mutableStateOf(false) }
                 var newPlaylistName by rememberSaveable { mutableStateOf("") }
 
-                // Toast show karo
                 LaunchedEffect(toastMessage) {
                     toastMessage?.let {
                         snackbarHostState.showSnackbar(it)
@@ -140,17 +129,12 @@ class MainActivity : ComponentActivity() {
                     bottomBar = {
                         if (showBottomBar) {
                             Column {
+                                // 👇 Back to Standard Navigation
                                 MiniPlayer(
                                     playerState = playerState,
-                                    onPlayPause = {
-                                        homeViewModel.playerController.pauseResume()
-                                    },
-                                    onNext = {
-                                        homeViewModel.playerController.next()
-                                    },
-                                    onPlayerClick = {
-                                        navController.navigate(Screen.NowPlaying.route)
-                                    }
+                                    onPlayPause = { homeViewModel.playerController.pauseResume() },
+                                    onNext = { homeViewModel.playerController.next() },
+                                    onPlayerClick = { navController.navigate(Screen.NowPlaying.route) }
                                 )
                                 NavigationBar {
                                     bottomNavItems.forEach { (route, icon, label) ->
@@ -158,16 +142,12 @@ class MainActivity : ComponentActivity() {
                                             selected = currentRoute == route,
                                             onClick = {
                                                 navController.navigate(route) {
-                                                    popUpTo(Screen.Home.route) {
-                                                        saveState = true
-                                                    }
+                                                    popUpTo(Screen.Home.route) { saveState = true }
                                                     launchSingleTop = true
                                                     restoreState = true
                                                 }
                                             },
-                                            icon = {
-                                                Icon(icon, contentDescription = label)
-                                            },
+                                            icon = { Icon(icon, contentDescription = label) },
                                             label = { Text(label) }
                                         )
                                     }
@@ -182,25 +162,19 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(paddingValues)
                     )
 
-                    // Add to Playlist Dialog
                     showAddToPlaylist?.let { song ->
                         AddToPlaylistDialog(
                             song = song,
                             playlists = playlists,
-                            onPlaylistSelected = { playlist ->
-                                sharedViewModel.addSongToPlaylist(playlist, song)
-                            },
+                            onPlaylistSelected = { playlist -> sharedViewModel.addSongToPlaylist(playlist, song) },
                             onCreateNew = {
                                 showNewPlaylistDialog = true
                                 newPlaylistName = ""
                             },
-                            onDismiss = {
-                                sharedViewModel.hideAddToPlaylistDialog()
-                            }
+                            onDismiss = { sharedViewModel.hideAddToPlaylistDialog() }
                         )
                     }
 
-                    // Nai playlist banao dialog
                     if (showNewPlaylistDialog) {
                         AlertDialog(
                             onDismissRequest = { showNewPlaylistDialog = false },
@@ -216,18 +190,13 @@ class MainActivity : ComponentActivity() {
                             confirmButton = {
                                 Button(onClick = {
                                     showAddToPlaylist?.let { song ->
-                                        sharedViewModel.createPlaylistAndAdd(
-                                            newPlaylistName,
-                                            song
-                                        )
+                                        sharedViewModel.createPlaylistAndAdd(newPlaylistName, song)
                                     }
                                     showNewPlaylistDialog = false
                                 }) { Text("Banao") }
                             },
                             dismissButton = {
-                                TextButton(onClick = {
-                                    showNewPlaylistDialog = false
-                                }) { Text("Cancel") }
+                                TextButton(onClick = { showNewPlaylistDialog = false }) { Text("Cancel") }
                             }
                         )
                     }

@@ -1,6 +1,7 @@
 package com.example.musicplayer.presentation.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,31 +34,7 @@ fun MusicNavGraph(
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route,
-        modifier = modifier,
-        enterTransition = {
-            slideIntoContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(ANIM_DURATION)
-            )
-        },
-        exitTransition = {
-            slideOutOfContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(ANIM_DURATION)
-            )
-        },
-        popEnterTransition = {
-            slideIntoContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(ANIM_DURATION)
-            )
-        },
-        popExitTransition = {
-            slideOutOfContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(ANIM_DURATION)
-            )
-        }
+        modifier = modifier
     ) {
         composable(
             route = Screen.Home.route,
@@ -65,113 +42,62 @@ fun MusicNavGraph(
             exitTransition = { fadeOut(tween(ANIM_DURATION)) }
         ) {
             HomeScreen(
-                onSongClick = {
-                    navController.navigate(Screen.NowPlaying.route)
-                },
-                onNavigateToDownloads = {
-                    navController.navigate(Screen.Downloads.route)  // ← Ye add karo
-                },
+                onSongClick = { navController.navigate(Screen.NowPlaying.route) },
+                onNavigateToDownloads = { navController.navigate(Screen.Downloads.route) },
                 sharedViewModel = sharedViewModel
             )
         }
 
-        composable(
-            route = Screen.Search.route,
-            enterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION)) }
-        ) {
-            SearchScreen(
-                onSongClick = {
-                    navController.navigate(Screen.NowPlaying.route)
-                },
-                sharedViewModel = sharedViewModel
-            )
+        composable(route = Screen.Search.route) {
+            SearchScreen(onSongClick = { navController.navigate(Screen.NowPlaying.route) }, sharedViewModel = sharedViewModel)
         }
 
-        composable(
-            route = Screen.Library.route,
-            enterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION)) }
-        ) {
-            LibraryScreen(
-                onSongClick = {
-                    navController.navigate(Screen.NowPlaying.route)
-                },
-                sharedViewModel = sharedViewModel
-            )
+        composable(route = Screen.Library.route) {
+            LibraryScreen(onSongClick = { navController.navigate(Screen.NowPlaying.route) }, sharedViewModel = sharedViewModel)
         }
 
-        composable(
-            route = Screen.Playlist.route,
-            enterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION)) }
-        ) {
-            PlaylistScreen(
-                onPlaylistClick = { playlistId ->
-                    navController.navigate(
-                        Screen.PlaylistDetail.createRoute(playlistId)
-                    )
-                }
-            )
+        composable(route = Screen.Playlist.route) {
+            PlaylistScreen(onPlaylistClick = { playlistId -> navController.navigate(Screen.PlaylistDetail.createRoute(playlistId)) })
         }
 
-        composable(
-            route = Screen.Downloads.route,
-            enterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION)) }
-        ) {
-            DownloadsScreen(
-                onSongClick = {
-                    navController.navigate(Screen.NowPlaying.route)
-                }
-            )
+        composable(route = Screen.Downloads.route) {
+            DownloadsScreen(onSongClick = { navController.navigate(Screen.NowPlaying.route) })
         }
 
+        // 👇 WAPAS AAGAYA NowPlaying Navigation ke andar
         composable(
             route = Screen.NowPlaying.route,
             enterTransition = {
                 slideInVertically(
                     initialOffsetY = { it },
-                    animationSpec = tween(ANIM_DURATION)
+                    animationSpec = tween(ANIM_DURATION, easing = LinearOutSlowInEasing)
                 )
             },
             exitTransition = {
                 slideOutVertically(
                     targetOffsetY = { it },
-                    animationSpec = tween(ANIM_DURATION)
-                )
-            },
-            popEnterTransition = {
-                slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(ANIM_DURATION)
+                    animationSpec = tween(ANIM_DURATION, easing = LinearOutSlowInEasing)
                 )
             },
             popExitTransition = {
                 slideOutVertically(
                     targetOffsetY = { it },
-                    animationSpec = tween(ANIM_DURATION)
+                    animationSpec = tween(ANIM_DURATION, easing = LinearOutSlowInEasing)
                 )
             }
         ) {
-            NowPlayingScreen(
-                onBackClick = { navController.popBackStack() }
-            )
+            NowPlayingScreen(onBackClick = { navController.popBackStack() })
         }
 
         composable(
             route = Screen.PlaylistDetail.route,
-            arguments = listOf(
-                navArgument("playlistId") { type = NavType.LongType }
-            )
+            arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
         ) { backStackEntry ->
-            val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: 0L
+            val id = backStackEntry.arguments?.getLong("playlistId") ?: 0L
             PlaylistDetailScreen(
-                playlistId = playlistId,
+                playlistId = id,
                 onBackClick = { navController.popBackStack() },
-                onSongClick = {
-                    navController.navigate(Screen.NowPlaying.route)
-                }
+                onSongClick = { navController.navigate(Screen.NowPlaying.route) }
             )
         }
     }

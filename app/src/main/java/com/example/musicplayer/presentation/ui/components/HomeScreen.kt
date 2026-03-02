@@ -51,140 +51,53 @@ fun HomeScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         when {
-            uiState.isLoading -> {
-                SongListShimmer(
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            uiState.isLoading -> { SongListShimmer(modifier = Modifier.fillMaxSize()) }
             uiState.error != null -> {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    // WiFi off icon
-                    Icon(
-                        imageVector = Icons.Default.WifiOff,
-                        contentDescription = null,
-                        modifier = Modifier.size(80.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
+                    Icon(Icons.Default.WifiOff, null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Internet nahi hai",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
+                    Text("Internet nahi hai", style = MaterialTheme.typography.headlineMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Internet connection check karo\naur dobara try karo",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-
+                    Text("Internet connection check karo\naur dobara try karo", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     Spacer(modifier = Modifier.height(24.dp))
-
-                    // Retry button
-                    Button(
-                        onClick = { viewModel.retry() },
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    Button(onClick = { viewModel.retry() }, shape = RoundedCornerShape(12.dp)) {
+                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Dobara Try Karo",
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                        Text("Dobara Try Karo", style = MaterialTheme.typography.titleMedium)
                     }
-
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    // Library me jao — offline songs
-                    OutlinedButton(
-                        onClick = { onNavigateToDownloads() },
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LibraryMusic,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    OutlinedButton(onClick = { onNavigateToDownloads() }, shape = RoundedCornerShape(12.dp)) {
+                        Icon(Icons.Default.LibraryMusic, null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Offline Songs Dekho")
                     }
                 }
             }
             else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                ) {
-                    // Recently Played
+                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
                     if (recentlyPlayed.isNotEmpty()) {
+                        item { Text("Recently Played", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp)) }
                         item {
-                            Text(
-                                text = "Recently Played",
-                                style = MaterialTheme.typography.headlineMedium,
-                                modifier = Modifier.padding(
-                                    start = 16.dp,
-                                    top = 24.dp,
-                                    bottom = 12.dp
-                                )
-                            )
-                        }
-                        item {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
+                            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 itemsIndexed(recentlyPlayed) { index, song ->
-                                    SongCard(
-                                        song = song,
-                                        onClick = {
-                                            viewModel.playSong(index)
-                                            onSongClick()
-                                        }
-                                    )
+                                    SongCard(song = song, onClick = { viewModel.playSong(index); onSongClick() })
                                 }
                             }
                         }
                         item { Spacer(modifier = Modifier.height(8.dp)) }
                     }
 
-                    // Trending Songs
-                    item {
-                        Text(
-                            text = "Trending Songs",
-                            style = MaterialTheme.typography.headlineMedium,
-                            modifier = Modifier.padding(
-                                start = 16.dp,
-                                top = 24.dp,
-                                bottom = 8.dp
-                            )
-                        )
-                    }
+                    item { Text("Trending Songs", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp)) }
 
                     itemsIndexed(uiState.trendingSongs) { index, song ->
                         SongItem(
                             song = song,
-                            onClick = {
-                                viewModel.playSong(index)
-                                onSongClick()
-                            },
-                            onMoreClick = {
-                                sharedViewModel.showAddToPlaylistDialog(song)
-                            },
+                            onClick = { viewModel.playSong(index); onSongClick() },
+                            onMoreClick = { sharedViewModel.showAddToPlaylistDialog(song) },
                             onDownloadClick = { sharedViewModel.downloadSong(it) },
                             isDownloading = downloadingIds.contains(song.id)
                         )
