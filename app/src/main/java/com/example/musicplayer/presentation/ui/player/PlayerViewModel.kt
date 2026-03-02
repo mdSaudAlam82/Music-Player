@@ -24,16 +24,23 @@ class PlayerViewModel @Inject constructor(
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     init {
-        // PlayerController ka state observe karo
         viewModelScope.launch {
             playerController.playerState.collect { playerState ->
+                // 👇 Naya gaana aane par purane lyrics hata do
+                val isNewSong = playerState.currentSong?.id != _uiState.value.currentSong?.id
+
                 _uiState.update {
                     it.copy(
                         currentSong = playerState.currentSong,
                         isPlaying = playerState.isPlaying,
                         currentPosition = playerState.currentPosition,
                         duration = playerState.duration,
-                        playbackMode = playerState.playbackMode
+                        playbackMode = playerState.playbackMode,
+                        // Naye gaane ke liye sab reset
+                        lyrics = if (isNewSong) null else it.lyrics,
+                        lyricsError = if (isNewSong) null else it.lyricsError,
+                        showLyrics = if (isNewSong) false else it.showLyrics,
+                        isLyricsLoading = if (isNewSong) false else it.isLyricsLoading
                     )
                 }
             }
@@ -41,11 +48,8 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun playPause() = playerController.pauseResume()
-
     fun next() = playerController.next()
-
     fun previous() = playerController.previous()
-
     fun seekTo(position: Long) = playerController.seekTo(position)
 
     fun togglePlaybackMode() {
@@ -67,24 +71,25 @@ class PlayerViewModel @Inject constructor(
             return
         }
 
-        // Lyrics load karo
-        if (_uiState.value.lyrics == null && currentSong.hasLyrics) {
-            loadLyrics(currentSong.id)
+        // 👇 Yahan ID ki jagah Title aur Artist pass kar rahe hain
+        if (_uiState.value.lyrics == null) {
+            loadLyrics(currentSong.title, currentSong.artist ?: "")
         }
         _uiState.update { it.copy(showLyrics = true) }
     }
 
-    private fun loadLyrics(songId: String) {
+    private fun loadLyrics(title: String, artist: String) {
         viewModelScope.launch {
-            getLyricsUseCase(songId).collect { result ->
+            getLyricsUseCase(title, artist).collect { result ->
                 when (result) {
                     is Resource.Loading -> _uiState.update {
-                        it.copy(isLyricsLoading = true)
+                        it.copy(isLyricsLoading = true, lyricsError = null)
                     }
                     is Resource.Success -> _uiState.update {
                         it.copy(
                             isLyricsLoading = false,
-                            lyrics = result.data
+                            lyrics = result.data,
+                            lyricsError = null
                         )
                     }
                     is Resource.Error -> _uiState.update {
@@ -98,7 +103,6 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    // Time format karo — ms to mm:ss
     fun formatDuration(ms: Long): String {
         val totalSeconds = ms / 1000
         val minutes = totalSeconds / 60

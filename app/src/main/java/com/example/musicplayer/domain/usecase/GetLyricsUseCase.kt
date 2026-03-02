@@ -8,7 +8,8 @@ import javax.inject.Inject
 class GetLyricsUseCase @Inject constructor(
     private val repository: MusicRepository
 ) {
-    suspend operator fun invoke(songId: String): Flow<Resource<String>> {
-        return repository.getLyrics(songId)
+    // 👇 ID ki jagah Title, Artist
+    suspend operator fun invoke(title: String, artist: String): Flow<Resource<String>> {
+        return repository.getLyrics(title, artist)
     }
 }

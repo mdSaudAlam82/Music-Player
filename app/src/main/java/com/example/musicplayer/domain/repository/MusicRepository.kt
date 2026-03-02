@@ -8,19 +8,16 @@ import kotlinx.coroutines.flow.Flow
 
 interface MusicRepository {
 
-    // Search
     suspend fun searchSongs(
         query: String,
         page: Int = 0,
         limit: Int = 20
     ): Flow<Resource<SearchResult>>
 
-    // Song detail — stream URL lene ke liye
     suspend fun getSongById(id: String): Flow<Resource<Song>>
 
-    // Album detail
     suspend fun getAlbumById(id: String): Flow<Resource<Album>>
 
-    // Lyrics
-    suspend fun getLyrics(songId: String): Flow<Resource<String>>
+    // 👇 Yahan Title aur Artist kiya hai
+    suspend fun getLyrics(title: String, artist: String): Flow<Resource<String>>
 }

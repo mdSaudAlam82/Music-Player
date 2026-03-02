@@ -27,11 +27,9 @@ class MusicRepositoryImpl @Inject constructor(
             val response = api.searchSongs(query, page, limit)
             if (response.success && response.data != null) {
                 val songs = response.data.results.map { it.toDomain() }
-
-                // 👇 FIXED: Named arguments taaki confusion na ho
                 emit(Resource.Success(SearchResult(
                     songs = songs,
-                    albums = emptyList(), // Isse error 100% solve ho jayega
+                    albums = emptyList(),
                     totalSongs = response.data.total
                 )))
             } else {
@@ -62,11 +60,24 @@ class MusicRepositoryImpl @Inject constructor(
         } catch (e: Exception) { emit(Resource.Error("Album load failed")) }
     }
 
-    override suspend fun getLyrics(songId: String): Flow<Resource<String>> = flow {
+    override suspend fun getLyrics(title: String, artist: String): Flow<Resource<String>> = flow {
         emit(Resource.Loading())
         try {
-            val response = api.getLyrics(songId)
-            if (response.success) emit(Resource.Success(response.data?.lyrics ?: ""))
-        } catch (e: Exception) { emit(Resource.Error("Lyrics error")) }
-    }
+            val cleanTitle = title.replace(Regex("\\(.*?\\)|\\[.*?\\]"), "").trim()
+            val cleanArtist = artist.split(",").first().trim()
+
+            val response = api.getLrcLibLyrics(trackName = cleanTitle, artistName = cleanArtist)
+
+            // 👇 FIXED: Ab pehle Synced (Chalti hui) lyrics uthayega, agar nahi mila tab Plain uthayega
+            val finalLyrics = response.syncedLyrics ?: response.plainLyrics
+
+            if (!finalLyrics.isNullOrBlank()) {
+                emit(Resource.Success(finalLyrics))
+            } else {
+                emit(Resource.Error("Is gaane ke lyrics LRCLIB par nahi mile"))
+            }
+        } catch (e: Exception) {
+            emit(Resource.Error("Lyrics nahi mile (LRCLIB)"))
+        }
+    }.flowOn(Dispatchers.IO)
 }

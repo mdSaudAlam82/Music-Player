@@ -8,22 +8,26 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,13 +51,31 @@ fun NowPlayingScreen(
         label = "artwork_scale"
     )
 
+    // 👇 LYRICS PARSING LOGIC 👇
+    // Ye line server se aaye hue text ko list mein tod degi
+    val parsedLyrics = remember(uiState.lyrics) { parseLrc(uiState.lyrics ?: "") }
+    val listState = rememberLazyListState()
+
+    // Pata karo ki gaane ke time ke hisaab se abhi kaunsi line chal rahi hai
+    val currentLineIndex = remember(uiState.currentPosition, parsedLyrics) {
+        val index = parsedLyrics.indexOfLast { it.timeMs <= uiState.currentPosition }
+        if (index != -1) index else 0
+    }
+
+    // Jaise hi line change hogi, screen apne aap wahan scroll ho jayegi
+    LaunchedEffect(currentLineIndex) {
+        if (parsedLyrics.isNotEmpty() && parsedLyrics[0].timeMs != -1L) {
+            listState.animateScrollToItem(currentLineIndex, scrollOffset = -300)
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.surface, // Solid Color for clean exit
+                        MaterialTheme.colorScheme.surface,
                         MaterialTheme.colorScheme.background
                     )
                 )
@@ -89,13 +111,38 @@ fun NowPlayingScreen(
             ) { showLyrics ->
                 if (showLyrics) {
                     Box(
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
                         when {
                             uiState.isLyricsLoading -> CircularProgressIndicator()
-                            uiState.lyricsError != null -> Text("Lyrics nahi mile")
-                            uiState.lyrics != null -> Text(uiState.lyrics!!, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState()))
+                            uiState.lyricsError != null -> Text(uiState.lyricsError ?: "Lyrics nahi mile")
+                            parsedLyrics.isNotEmpty() -> {
+                                // 👇 AUTO SCROLLING LYRICS UI 👇
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    itemsIndexed(parsedLyrics) { index, line ->
+                                        // Highlight condition: Current line ho aur wo synced format mein ho
+                                        val isActive = index == currentLineIndex && line.timeMs != -1L
+
+                                        Text(
+                                            text = line.text,
+                                            style = if (isActive) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyMedium,
+                                            color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(vertical = 12.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
@@ -150,4 +197,42 @@ fun NowPlayingScreen(
             }
         }
     }
+}
+
+// ==========================================
+// 👇 YE RAHI PARSER CLASS AUR FUNCTION 👇
+// Ise yahi file ke sabse neeche rehne dena
+// ==========================================
+
+data class LyricLine(val timeMs: Long, val text: String)
+
+fun parseLrc(lrc: String): List<LyricLine> {
+    if (lrc.isBlank()) return emptyList()
+
+    val lines = mutableListOf<LyricLine>()
+    val regex = Regex("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)")
+
+    lrc.lines().forEach { line ->
+        val match = regex.find(line)
+        if (match != null) {
+            val min = match.groupValues[1].toLong()
+            val sec = match.groupValues[2].toLong()
+            val msPart = match.groupValues[3]
+            // Agar millisecond 2 digit ka hai toh use 3 digit banate hain
+            val ms = if (msPart.length == 2) msPart.toLong() * 10 else msPart.toLong()
+            val text = match.groupValues[4].trim()
+            val totalMs = min * 60000 + sec * 1000 + ms
+
+            if (text.isNotEmpty()) {
+                lines.add(LyricLine(totalMs, text))
+            }
+        }
+    }
+
+    // Agar gaane mein synced (time wale) lyrics nahi hain, toh usko normal text ki tarah padh lo
+    if (lines.isEmpty() && lrc.isNotBlank()) {
+        return lrc.lines().filter { it.isNotBlank() }.map { LyricLine(-1L, it.trim()) }
+    }
+
+    return lines
 }
