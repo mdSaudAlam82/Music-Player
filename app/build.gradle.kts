@@ -24,7 +24,7 @@ android {
 
     buildTypes {
         release {
-            // ✅ FIX: App size chhota karne ke liye aur code secure karne ke liye
+            // ✅ Production Optimization: Size kam aur security zyada
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -69,24 +69,24 @@ dependencies {
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
-    // Retrofit
+    // Retrofit (Networking)
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.gson)
 
-    // Room
+    // Room (Database)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // Media3
+    // Media3 (ExoPlayer)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.media3.session)
 
-    // Coil
+    // Coil (Image Loading)
     implementation(libs.coil.compose)
 
     // Coroutines

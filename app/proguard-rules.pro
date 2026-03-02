@@ -1,21 +1,21 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Retrofit aur OkHttp (Network safety)
+-keepattributes Signature, InnerClasses, AnnotationDefault
+-keep class retrofit2.** { *; }
+-keep @interface retrofit2.http.** { *; }
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Data Models (Inhe mat chhedna warna lyrics aur search results gayab ho jayenge)
+-keep class com.example.musicplayer.data.remote.dto.** { *; }
+-keep class com.example.musicplayer.data.remote.api.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Hilt aur Dagger (Dependency Injection)
+-keep class dagger.hilt.** { *; }
+-keep class com.example.musicplayer.di.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Media3 aur ExoPlayer (Music Engine)
+-keep class androidx.media3.** { *; }
+
+# Coil (Images loading ke liye)
+-keep class coil.** { *; }
+
+# Room Database
+-keep class com.example.musicplayer.data.local.** { *; }
