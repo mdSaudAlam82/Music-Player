@@ -1,21 +1,20 @@
-# Retrofit aur OkHttp (Network safety)
+# Retrofit specific rules
 -keepattributes Signature, InnerClasses, AnnotationDefault
 -keep class retrofit2.** { *; }
 -keep @interface retrofit2.http.** { *; }
 
-# Data Models (Inhe mat chhedna warna lyrics aur search results gayab ho jayenge)
--keep class com.example.musicplayer.data.remote.dto.** { *; }
--keep class com.example.musicplayer.data.remote.api.** { *; }
+# DTO models ko specific rakha hai taaki API responses sahi se parse hon aur warning na aaye
+-keep class com.example.musicplayer.data.remote.dto.** { <fields>; <methods>; }
+-keep class com.example.musicplayer.data.remote.api.** { <methods>; }
 
-# Hilt aur Dagger (Dependency Injection)
+# Hilt & Dependency Injection
 -keep class dagger.hilt.** { *; }
--keep class com.example.musicplayer.di.** { *; }
 
-# Media3 aur ExoPlayer (Music Engine)
+# Media3 & ExoPlayer (Music bajne ke liye zaroori)
 -keep class androidx.media3.** { *; }
 
-# Coil (Images loading ke liye)
+# Coil (Album art load karne ke liye)
 -keep class coil.** { *; }
 
-# Room Database
+# Room Database (Agar aap playlists save kar rahe hain)
 -keep class com.example.musicplayer.data.local.** { *; }

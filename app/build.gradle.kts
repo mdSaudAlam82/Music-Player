@@ -39,6 +39,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // ✅ FIXED: Wapas purane aur stable tarike par
     kotlinOptions {
         jvmTarget = "17"
     }
