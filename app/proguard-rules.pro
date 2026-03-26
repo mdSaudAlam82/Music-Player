@@ -1,20 +1,39 @@
-# Retrofit specific rules
--keepattributes Signature, InnerClasses, AnnotationDefault
+# ==========================================
+# MUSIC PLAYER PROGUARD RULES
+# ==========================================
+
+# 1. Models & GSON (Network Data bachaane ke liye)
+-keep class com.example.musicplayer.data.remote.dto.** { *; }
+-keep class com.example.musicplayer.domain.model.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn sun.misc.Unsafe
+-keep class com.google.gson.** { *; }
+
+# 2. Retrofit (API calls theek rahein)
+-keep,allowobfuscation,allowshrinking interface retrofit2.http.** { *; }
 -keep class retrofit2.** { *; }
--keep @interface retrofit2.http.** { *; }
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
 
-# DTO models ko specific rakha hai taaki API responses sahi se parse hon aur warning na aaye
--keep class com.example.musicplayer.data.remote.dto.** { <fields>; <methods>; }
--keep class com.example.musicplayer.data.remote.api.** { <methods>; }
+# 3. Room Database (Database bachao)
+-keep class * extends androidx.room.RoomDatabase
+-keep class com.example.musicplayer.data.local.entity.** { *; }
+-keep class com.example.musicplayer.data.local.dao.** { *; }
 
-# Hilt & Dependency Injection
--keep class dagger.hilt.** { *; }
+# 4. Hilt / Dagger (DI system)
+-keep class * extends dagger.hilt.android.lifecycle.HiltViewModel
+-keep,allowobfuscation,allowshrinking @interface dagger.hilt.*
+-keep,allowobfuscation,allowshrinking @interface javax.inject.*
 
-# Media3 & ExoPlayer (Music bajne ke liye zaroori)
+# 5. ExoPlayer / Media3
 -keep class androidx.media3.** { *; }
 
-# Coil (Album art load karne ke liye)
+# 6. Coil & Palette (Images aur colors ke liye)
 -keep class coil.** { *; }
+-keep class androidx.palette.** { *; }
 
-# Room Database (Agar aap playlists save kar rahe hain)
--keep class com.example.musicplayer.data.local.** { *; }
+# 7. Coroutines (Background tasks)
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}

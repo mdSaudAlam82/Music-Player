@@ -31,7 +31,8 @@ object MediaModule {
         audioAttributes: AudioAttributes
     ): ExoPlayer {
         return ExoPlayer.Builder(context)
-            .setAudioAttributes(audioAttributes, true)
+            // 👇 YAHAN FALSE KARNA HAI taaki hum manually focus control kar sakein
+            .setAudioAttributes(audioAttributes, false)
             .setHandleAudioBecomingNoisy(true)
             .build()
     }

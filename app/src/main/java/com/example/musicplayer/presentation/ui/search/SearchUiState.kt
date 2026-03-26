@@ -5,7 +5,9 @@ import com.example.musicplayer.domain.model.Song
 data class SearchUiState(
     val query: String = "",
     val isLoading: Boolean = false,
+    val isPaginating: Boolean = false,
     val songs: List<Song> = emptyList(),
     val error: String? = null,
-    val isEmpty: Boolean = false
+    val isEmpty: Boolean = false,
+    val hasReachedEnd: Boolean = false
 )

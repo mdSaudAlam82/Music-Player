@@ -46,8 +46,13 @@ class MusicRepositoryImpl @Inject constructor(
             val response = api.getSongById(id)
             if (response.success && !response.data.isNullOrEmpty()) {
                 emit(Resource.Success(response.data.first().toDomain()))
+            } else {
+                // 👇 NAYA: Agar song nahi mila toh proper error bhejo taaki spinner ruk jaye
+                emit(Resource.Error("Song fetch failed - No data"))
             }
-        } catch (e: Exception) { emit(Resource.Error("Song fetch failed")) }
+        } catch (e: Exception) {
+            emit(Resource.Error("Song fetch failed: ${e.localizedMessage}"))
+        }
     }
 
     override suspend fun getAlbumById(id: String): Flow<Resource<Album>> = flow {
@@ -67,7 +72,6 @@ class MusicRepositoryImpl @Inject constructor(
             val cleanArtist = artist.split(",").first().trim()
 
             val response = api.getLrcLibLyrics(trackName = cleanTitle, artistName = cleanArtist)
-
             val finalLyrics = response.syncedLyrics ?: response.plainLyrics
 
             if (!finalLyrics.isNullOrBlank()) {
@@ -80,24 +84,50 @@ class MusicRepositoryImpl @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    // 👇 NAYA LOGIC: Similar Songs (Endless Playback ke liye) 👇
     override suspend fun getSimilarSongs(song: Song): Flow<Resource<List<Song>>> = flow {
         emit(Resource.Loading())
         try {
-            // Hum gaane ke artist se naye gaane dhoondhenge taaki vibe match kare
-            val query = song.artist?.split(",")?.first()?.trim() ?: song.title
-            val response = api.searchSongs(query, page = 0, limit = 15)
-            val data = response.data
+            val primaryArtist = song.artist.split(",").first().trim()
 
-            if (response.success && data != null) {
-                val similarSongs = data.results
+            val titleKeyword = song.title
+                .replace(Regex("\\(.*?\\)|\\[.*?\\]|feat.*|ft\\..*"), "")
+                .trim()
+                .split(" ")
+                .take(2)
+                .joinToString(" ")
+
+            val artistQuery = primaryArtist
+            val response = api.searchSongs(artistQuery, page = 0, limit = 20)
+
+            if (response.success && response.data != null) {
+                val similar = response.data.results
                     .map { it.toDomain() }
-                    .filter { it.id != song.id } // Purana gaana dobara na aaye
+                    .filter { it.id != song.id }
+                    .filter { it.streamUrl.isNotBlank() }
+                    .distinctBy { it.id }
+                    .take(10)
 
-                emit(Resource.Success(similarSongs))
+                if (similar.isNotEmpty()) {
+                    emit(Resource.Success(similar))
+                    return@flow
+                }
+            }
+
+            val fallbackQuery = "${song.title.split(" ").first()} songs"
+            val fallbackResponse = api.searchSongs(fallbackQuery, page = 0, limit = 15)
+
+            if (fallbackResponse.success && fallbackResponse.data != null) {
+                val fallbackSongs = fallbackResponse.data.results
+                    .map { it.toDomain() }
+                    .filter { it.id != song.id }
+                    .filter { it.streamUrl.isNotBlank() }
+                    .take(10)
+
+                emit(Resource.Success(fallbackSongs))
             } else {
                 emit(Resource.Error("Naye gaane nahi mile"))
             }
+
         } catch (e: Exception) {
             emit(Resource.Error(e.localizedMessage ?: "Network error"))
         }

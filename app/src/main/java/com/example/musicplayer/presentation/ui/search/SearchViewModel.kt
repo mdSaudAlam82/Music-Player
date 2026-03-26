@@ -7,13 +7,7 @@ import com.example.musicplayer.domain.usecase.SearchSongsUseCase
 import com.example.musicplayer.service.PlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -25,57 +19,91 @@ class SearchViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
-    val uiState: StateFlow<SearchUiState> = _uiState
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = SearchUiState()
-        )
+    val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
+    private var currentPage = 1
+    private var isFetchingMore = false
 
     init {
         viewModelScope.launch {
             _searchQuery
-                .debounce(500L)
+                .debounce(600L)
                 .distinctUntilChanged()
                 .filter { it.isNotBlank() }
-                .collect { query -> performSearch(query) }
+                .collect { query -> performSearch(query, isNewSearch = true) }
         }
     }
 
     fun onQueryChange(query: String) {
-        _uiState.value.let { current ->
-            _uiState.value = current.copy(query = query)
-        }
+        _uiState.update { it.copy(query = query) }
         _searchQuery.value = query
         if (query.isBlank()) {
-            _uiState.value = _uiState.value.copy(
-                songs = emptyList(),
-                isEmpty = false,
-                error = null
-            )
+            _uiState.update {
+                it.copy(songs = emptyList(), isEmpty = false, error = null, hasReachedEnd = false)
+            }
         }
     }
 
-    private fun performSearch(query: String) {
+    fun forceSearch() {
+        val query = _uiState.value.query.trim()
+        if (query.isNotBlank()) {
+            performSearch(query, isNewSearch = true)
+        }
+    }
+
+    private fun performSearch(query: String, isNewSearch: Boolean) {
+        if (isFetchingMore) return
+        if (!isNewSearch && _uiState.value.hasReachedEnd) return
+
         viewModelScope.launch {
-            searchSongsUseCase(query).collect { result ->
+            if (isNewSearch) {
+                currentPage = 1
+                _uiState.update { it.copy(isLoading = true, error = null, hasReachedEnd = false) }
+            } else {
+                isFetchingMore = true
+                _uiState.update { it.copy(isPaginating = true, error = null) }
+            }
+
+            searchSongsUseCase(query, currentPage, limit = 20).collect { result ->
                 when (result) {
-                    is Resource.Loading -> _uiState.value =
-                        _uiState.value.copy(isLoading = true, error = null)
                     is Resource.Success -> {
-                        val songs = result.data?.songs ?: emptyList()
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            songs = songs,
-                            isEmpty = songs.isEmpty()
-                        )
+                        val newSongs = result.data?.songs ?: emptyList()
+
+                        val currentList = if (isNewSearch) emptyList() else _uiState.value.songs
+                        val combinedList = (currentList + newSongs).distinctBy { it.id }
+
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                isPaginating = false,
+                                songs = combinedList,
+                                isEmpty = combinedList.isEmpty(),
+                                hasReachedEnd = newSongs.isEmpty() || newSongs.size < 20
+                            )
+                        }
+
+                        if (newSongs.isNotEmpty()) {
+                            currentPage++
+                        }
+                        isFetchingMore = false
                     }
-                    is Resource.Error -> _uiState.value =
-                        _uiState.value.copy(isLoading = false, error = result.message)
+                    is Resource.Error -> {
+                        _uiState.update {
+                            it.copy(isLoading = false, isPaginating = false, error = result.message)
+                        }
+                        isFetchingMore = false
+                    }
+                    is Resource.Loading -> { }
                 }
             }
+        }
+    }
+
+    fun loadNextPage() {
+        val query = _uiState.value.query.trim()
+        if (query.isNotBlank()) {
+            performSearch(query, isNewSearch = false)
         }
     }
 

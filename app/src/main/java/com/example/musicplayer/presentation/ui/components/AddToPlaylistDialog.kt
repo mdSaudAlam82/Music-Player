@@ -13,10 +13,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay // ✅ Updated Import
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider // ✅ Updated Import
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,7 +47,7 @@ fun AddToPlaylistDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                Divider()
+                HorizontalDivider() // ✅ Updated
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Nai playlist banao option
@@ -72,7 +72,7 @@ fun AddToPlaylistDialog(
                     )
                 }
 
-                Divider()
+                HorizontalDivider() // ✅ Updated
 
                 // Existing playlists
                 if (playlists.isEmpty()) {
@@ -93,7 +93,7 @@ fun AddToPlaylistDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.PlaylistPlay,
+                                    imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, // ✅ Updated
                                     contentDescription = null,
                                     modifier = Modifier.size(28.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant

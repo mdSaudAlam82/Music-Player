@@ -20,14 +20,14 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val searchSongsUseCase: SearchSongsUseCase,
     private val getRecentlyPlayedUseCase: GetRecentlyPlayedUseCase,
-    val playerController: PlayerController
+    // PlayerController yahan rakhna zaruri hai kyunki HomeScreen se song play hota hai
+    // Lekin playerState ab SharedViewModel se lenge (MainActivity mein)
+    private val playerController: PlayerController
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    // Recently played — stateIn use karo
-    // Ye sirf tab collect karega jab UI observe kar raha ho
     val recentlyPlayed = getRecentlyPlayedUseCase()
         .stateIn(
             scope = viewModelScope,
@@ -39,7 +39,6 @@ class HomeViewModel @Inject constructor(
         loadTrendingSongs()
     }
 
-    // Retry button ke liye public function
     fun retry() {
         loadTrendingSongs()
     }

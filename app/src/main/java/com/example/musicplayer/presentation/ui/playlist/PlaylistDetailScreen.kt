@@ -12,10 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack // ✅ Updated Import
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Delete // ✅ Naya import delete ke liye
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,7 +63,7 @@ fun PlaylistDetailScreen(
             },
             navigationIcon = {
                 IconButton(onClick = onBackClick) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") // ✅ Updated
                 }
             },
             actions = {
@@ -129,7 +129,6 @@ fun PlaylistDetailScreen(
                         onMoreClick = {
                             viewModel.removeSongFromPlaylist(song.id)
                         },
-                        // 👇 AB YAHAN 3-DOT KI JAGAH TRASH ICON DIKHEGA
                         moreIcon = Icons.Default.Delete
                     )
                 }

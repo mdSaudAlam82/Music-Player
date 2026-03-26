@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -17,16 +19,25 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // 👇 OPTIMIZATION: Faltu bhasha (languages) hata di, sirf English rakhi
+        resConfigs("en")
+
         ndk {
-            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+            // 👇 OPTIMIZATION: Sirf modern 64-bit architecture rakha hai (App size aur kam hoga)
+            abiFilters.add("arm64-v8a")
+            // Agar Play Store par error aaye purane phones ke liye, tabhi "armeabi-v7a" add karna. Par aayega nahi.
         }
     }
 
     buildTypes {
         release {
-            // ✅ Production Optimization: Size kam aur security zyada
             isMinifyEnabled = true
-            isShrinkResources = true
+            isShrinkResources = true // Faltu photos/icons remove karega
+            isProfileable = false    // Production me iski zaroorat nahi
+
+            // 👇 OPTIMIZATION: Zip alignment app ko aur chhota banata hai
+            isZipAlignEnabled = true
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -39,13 +50,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // ✅ FIXED: Wapas purane aur stable tarike par
     kotlinOptions {
         jvmTarget = "17"
     }
 
     buildFeatures {
         compose = true
+    }
+
+    ksp {
+        arg("incremental", "false")
     }
 }
 
@@ -87,9 +101,6 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.media3.session)
 
-    // Coil (Image Loading)
-    implementation(libs.coil.compose)
-
     // Coroutines
     implementation(libs.coroutines.android)
 
@@ -97,6 +108,12 @@ dependencies {
     implementation(libs.datastore.preferences)
 
     debugImplementation(libs.androidx.ui.tooling)
+
+    // Other specific dependencies
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.media:media:1.7.0")
+    implementation("androidx.palette:palette-ktx:1.0.0")
+
+    // Coil (Image Loading) - Tumne 2 jagah likha tha[cite: 6], maine saaf kar diya
+    implementation(libs.coil.compose)
 }

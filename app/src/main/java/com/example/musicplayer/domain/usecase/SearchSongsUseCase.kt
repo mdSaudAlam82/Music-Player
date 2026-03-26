@@ -9,11 +9,8 @@ import javax.inject.Inject
 class SearchSongsUseCase @Inject constructor(
     private val repository: MusicRepository
 ) {
-    suspend operator fun invoke(
-        query: String,
-        page: Int = 0,
-        limit: Int = 20
-    ): Flow<Resource<SearchResult>> {
+    // 👇 NAYA: Yahan page aur limit add kiya hai
+    suspend operator fun invoke(query: String, page: Int = 1, limit: Int = 20): Flow<Resource<SearchResult>> {
         return repository.searchSongs(query, page, limit)
     }
 }

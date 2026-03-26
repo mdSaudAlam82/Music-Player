@@ -79,8 +79,11 @@ class MediaStoreHelper @Inject constructor(
                 val path = it.getString(dataColumn) ?: continue
                 val year = it.getInt(yearColumn).toString()
 
-                // Album art URI banao
-                val artworkUri = "content://media/external/audio/albumart/$albumId"
+                // Album art URI banao (Safe method for Android 10+)
+                val artworkUri = android.content.ContentUris.withAppendedId(
+                    android.net.Uri.parse("content://media/external/audio/albumart"),
+                    it.getLong(albumIdColumn)
+                ).toString()
 
                 // File content URI banao — ExoPlayer isse play karega
                 val contentUri = Uri.withAppendedPath(

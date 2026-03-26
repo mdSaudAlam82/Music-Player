@@ -25,10 +25,8 @@ class MusicPlayerService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
-        // 1. CPU aur Network ko zinda rakhne ke liye WakeMode
         player.setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
 
-        // 2. Notification par click karne se app khulne ka rasta (PendingIntent)
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -40,13 +38,11 @@ class MusicPlayerService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        // 3. MediaSession build karna (PendingIntent ke sath)
         mediaSession = MediaSession.Builder(this, player)
             .setId("MusicPlayerServiceSession")
             .setSessionActivity(pendingIntent) // Notification block hone se bachayega
             .build()
 
-        // 4. Notification Provider (Icon set karna)
         val notificationProvider = DefaultMediaNotificationProvider(this)
         notificationProvider.setSmallIcon(R.drawable.ic_launcher_foreground)
         setMediaNotificationProvider(notificationProvider)
@@ -56,15 +52,8 @@ class MusicPlayerService : MediaSessionService() {
         return mediaSession
     }
 
-    // 👇 THE IMMORTAL HACK 👇
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        // Ise poora khali rakha hai.
-        // Ab minimize screen se app hatane par bhi gaana aur notification chalte rahenge!
-    }
-
     override fun onDestroy() {
         mediaSession?.run {
-            player.release()
             release()
             mediaSession = null
         }

@@ -6,6 +6,7 @@ import com.example.musicplayer.data.local.entity.PlaylistSongEntity
 import com.example.musicplayer.domain.model.Playlist
 import com.example.musicplayer.domain.model.Song
 import com.example.musicplayer.domain.repository.PlaylistRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,6 +16,7 @@ class PlaylistRepositoryImpl @Inject constructor(
     private val playlistDao: PlaylistDao
 ) : PlaylistRepository {
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun getAllPlaylists(): Flow<List<Playlist>> {
         return playlistDao.getAllPlaylists().flatMapLatest { entities ->
             if (entities.isEmpty()) return@flatMapLatest flowOf(emptyList())
@@ -33,6 +35,7 @@ class PlaylistRepositoryImpl @Inject constructor(
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun getPlaylistById(id: Long): Flow<Playlist?> {
         return playlistDao.getPlaylistById(id).flatMapLatest { entity ->
             playlistDao.getSongsOfPlaylist(id).map { songs ->

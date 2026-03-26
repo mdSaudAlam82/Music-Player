@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 
+
 @Composable
 fun PlaylistScreen(
     onPlaylistClick: (Long) -> Unit,
@@ -56,7 +58,9 @@ fun PlaylistScreen(
         modifier = modifier,
         floatingActionButton = {
             FloatingActionButton(
-                onClick = viewModel::showCreateDialog
+                onClick = viewModel::showCreateDialog,
+                // 👇 NAYA: Button ko Mini-Player ke upar uthane ke liye padding laga di
+                modifier = Modifier.padding(bottom = 88.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Playlist banao")
             }
@@ -89,7 +93,7 @@ fun PlaylistScreen(
                         verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.PlaylistPlay,
+                            imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
                             contentDescription = null,
                             modifier = Modifier.size(72.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant

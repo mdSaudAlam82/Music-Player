@@ -15,10 +15,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -50,10 +50,9 @@ import com.example.musicplayer.presentation.navigation.MusicNavGraph
 import com.example.musicplayer.presentation.navigation.Screen
 import com.example.musicplayer.presentation.ui.components.AddToPlaylistDialog
 import com.example.musicplayer.presentation.ui.components.MiniPlayer
-import com.example.musicplayer.presentation.ui.home.HomeViewModel
 import com.example.musicplayer.presentation.ui.theme.MusicPlayerTheme
-import dagger.hilt.android.AndroidEntryPoint
 import com.example.musicplayer.service.MusicPlayerService
+import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -69,7 +68,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // ✅ FIXED TYPO: VERSION_CODES.M
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             val packageName = packageName
@@ -95,10 +93,9 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
-                val homeViewModel: HomeViewModel = hiltViewModel()
-                val playerState by homeViewModel.playerController.playerState.collectAsState()
-
+                // Ab sirf SharedViewModel — HomeViewModel ki zarurat nahi
                 val sharedViewModel: SharedViewModel = hiltViewModel()
+                val playerState by sharedViewModel.playerState.collectAsState()
                 val showAddToPlaylist by sharedViewModel.showAddToPlaylist.collectAsState()
                 val playlists by sharedViewModel.playlists.collectAsState()
                 val toastMessage by sharedViewModel.toastMessage.collectAsState()
@@ -117,7 +114,8 @@ class MainActivity : ComponentActivity() {
                     Triple(Screen.Home.route, Icons.Default.Home, "Home"),
                     Triple(Screen.Search.route, Icons.Default.Search, "Search"),
                     Triple(Screen.Library.route, Icons.Default.LibraryMusic, "Library"),
-                    Triple(Screen.Playlist.route, Icons.Default.PlaylistPlay, "Playlists"),
+                    Triple(Screen.Playlist.route,
+                        Icons.AutoMirrored.Filled.PlaylistPlay, "Playlists"),
                     Triple(Screen.Downloads.route, Icons.Default.Download, "Downloads")
                 )
 
@@ -129,11 +127,10 @@ class MainActivity : ComponentActivity() {
                     bottomBar = {
                         if (showBottomBar) {
                             Column {
-                                // 👇 Back to Standard Navigation
                                 MiniPlayer(
                                     playerState = playerState,
-                                    onPlayPause = { homeViewModel.playerController.pauseResume() },
-                                    onNext = { homeViewModel.playerController.next() },
+                                    onPlayPause = { sharedViewModel.playerController.pauseResume() },
+                                    onNext = { sharedViewModel.playerController.next() },
                                     onPlayerClick = { navController.navigate(Screen.NowPlaying.route) }
                                 )
                                 NavigationBar {

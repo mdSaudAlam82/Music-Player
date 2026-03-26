@@ -1,6 +1,12 @@
 package com.example.musicplayer.data.repository
 
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.Uri
+import android.os.Build
 import com.example.musicplayer.data.local.db.SongDao
 import com.example.musicplayer.data.local.toDomain
 import com.example.musicplayer.data.local.toEntity
@@ -9,128 +15,138 @@ import com.example.musicplayer.domain.model.Song
 import com.example.musicplayer.domain.repository.DownloadRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import kotlinx.coroutines.launch
 import java.io.File
-import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class DownloadRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val songDao: SongDao,
-    private val okHttpClient: OkHttpClient
+    private val songDao: SongDao
 ) : DownloadRepository {
 
-    override fun downloadSong(song: Song): Flow<Resource<Int>> = flow {
-        emit(Resource.Loading(0))
-        try {
-            // Stream URL check karo
-            if (song.streamUrl.isBlank()) {
-                emit(Resource.Error("Stream URL nahi mila"))
-                return@flow
+    override fun downloadSong(song: Song): Flow<Resource<Int>> = callbackFlow {
+        trySend(Resource.Loading(0))
+
+        if (song.streamUrl.isBlank()) {
+            trySend(Resource.Error("Stream URL nahi mila"))
+            close()
+            return@callbackFlow
+        }
+
+        val safeName = song.title.replace(Regex("[^a-zA-Z0-9._-]"), "_").take(50)
+        val fileName = "${song.id}_$safeName.mp3"
+        val downloadDir = File(context.getExternalFilesDir(null), "MusicPlayer/downloads")
+        val outputFile = File(downloadDir, fileName)
+
+        // Pehle se downloaded hai to seedha success
+        if (outputFile.exists() && outputFile.length() > 0) {
+            songDao.markAsDownloaded(song.id, outputFile.absolutePath)
+            trySend(Resource.Success(100))
+            close()
+            return@callbackFlow
+        }
+
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val request = DownloadManager.Request(Uri.parse(song.streamUrl)).apply {
+            setTitle(song.title)
+            setDescription("Downloading ${song.artist}")
+            // 👇 VISIBILITY FIX: Download poora hone par notification hata dega automatically (optional, par clean rakhta hai)
+            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+            setDestinationInExternalFilesDir(context, "MusicPlayer/downloads", fileName)
+            setAllowedOverMetered(true)
+        }
+
+        val downloadId = downloadManager.enqueue(request)
+        var isCompleted = false // Ek flag taaki loop band ho jaye
+
+        // BroadcastReceiver — jab download complete ho tab fire hoga
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+                if (id != downloadId) return
+
+                val query = DownloadManager.Query().setFilterById(downloadId)
+                val cursor = downloadManager.query(query)
+
+                if (cursor != null && cursor.moveToFirst()) {
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                        launch(Dispatchers.IO) {
+                            songDao.insertSong(song.copy(isDownloaded = true, localPath = outputFile.absolutePath).toEntity())
+                            songDao.markAsDownloaded(song.id, outputFile.absolutePath)
+                            isCompleted = true
+                            trySend(Resource.Success(100))
+                            close() // Flow band karo
+                        }
+                    } else if (status == DownloadManager.STATUS_FAILED) {
+                        isCompleted = true
+                        trySend(Resource.Error("Download fail ho gaya"))
+                        close()
+                    }
+                    cursor.close()
+                } else {
+                    // Agar cursor null hai matlab gaana process hi nahi hua
+                    isCompleted = true
+                    trySend(Resource.Error("Download error"))
+                    close()
+                }
             }
+        }
 
-            // Downloads folder
-            val downloadDir = File(context.getExternalFilesDir(null), "MusicPlayer/downloads")
-            if (!downloadDir.exists()) {
-                downloadDir.mkdirs()
-            }
+        // Receiver register karo
+        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
 
-            // File name safe banao
-            val safeName = song.title
-                .replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                .take(50)
-            val fileName = "${song.id}_$safeName.mp3"
-            val outputFile = File(downloadDir, fileName)
-
-            // Pehle se exist karta hai to skip
-            if (outputFile.exists() && outputFile.length() > 0) {
-                songDao.markAsDownloaded(song.id, outputFile.absolutePath)
-                emit(Resource.Success(100))
-                return@flow
-            }
-
-            // OkHttp request
-            val request = Request.Builder()
-                .url(song.streamUrl)
-                .addHeader("User-Agent", "Mozilla/5.0")
-                .build()
-
-            val response = okHttpClient.newCall(request).execute()
-
-            if (!response.isSuccessful) {
-                emit(Resource.Error("Server error: ${response.code}"))
-                return@flow
-            }
-
-            val body = response.body
-            if (body == null) {
-                emit(Resource.Error("Empty response aaya"))
-                return@flow
-            }
-
-            val totalBytes = body.contentLength()
-            var downloadedBytes = 0L
-
-            // Temp file me pehle likhenge
-            val tempFile = File(downloadDir, "$fileName.tmp")
-
-            try {
-                FileOutputStream(tempFile).use { outputStream ->
-                    body.byteStream().use { inputStream ->
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                            outputStream.write(buffer, 0, bytesRead)
-                            downloadedBytes += bytesRead
-                            if (totalBytes > 0) {
-                                val progress = ((downloadedBytes * 100) / totalBytes).toInt()
-                                emit(Resource.Loading(progress))
+        // Progress polling loop
+        launch(Dispatchers.IO) {
+            var previousProgress = 0
+            while (!isCompleted) {
+                delay(500L) // Thoda fast polling
+                val query = DownloadManager.Query().setFilterById(downloadId)
+                val cursor = downloadManager.query(query)
+                if (cursor != null && cursor.moveToFirst()) {
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    if (status == DownloadManager.STATUS_RUNNING) {
+                        val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                        val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                        if (total > 0) {
+                            val progress = ((downloaded * 100) / total).toInt()
+                            if (progress != previousProgress) {
+                                previousProgress = progress
+                                trySend(Resource.Loading(progress))
                             }
                         }
+                    } else if (status == DownloadManager.STATUS_FAILED || status == DownloadManager.STATUS_SUCCESSFUL) {
+                        cursor.close()
+                        break // Receiver sambhal lega
                     }
+                    cursor.close()
                 }
-
-                // Temp se final file pe move karo
-                tempFile.renameTo(outputFile)
-
-            } catch (e: Exception) {
-                // Error pe temp file delete karo
-                tempFile.delete()
-                throw e
             }
-
-            // File successfully download hui
-            val downloadedSong = song.copy(
-                isDownloaded = true,
-                localPath = outputFile.absolutePath
-            )
-
-            // Pehle insert karo
-            songDao.insertSong(downloadedSong.toEntity())
-
-            // Phir explicitly mark karo — double confirm
-            songDao.markAsDownloaded(song.id, outputFile.absolutePath)
-
-            // Verify karo — file exist karti hai?
-            if (!outputFile.exists() || outputFile.length() == 0L) {
-                emit(Resource.Error("File save nahi hui"))
-                return@flow
-            }
-
-            emit(Resource.Success(100))
-
-        } catch (e: Exception) {
-            emit(Resource.Error("Download fail: ${e.localizedMessage ?: "Unknown error"}"))
         }
-    }.flowOn(Dispatchers.IO) // IO thread pe chalao
 
+        awaitClose {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    // ... (baaki functions same rahenge)
     override fun getDownloadedSongs(): Flow<List<Song>> {
         return songDao.getDownloadedSongs().map { list ->
             list.map { it.toDomain() }

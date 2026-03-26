@@ -1,6 +1,10 @@
 package com.example.musicplayer.presentation.ui.player
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
@@ -13,6 +17,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,30 +25,51 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import com.example.musicplayer.domain.model.PlaybackMode
+import com.example.musicplayer.domain.model.Song
+import com.example.musicplayer.presentation.SharedViewModel
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingScreen(
     onBackClick: () -> Unit,
+    sharedViewModel: SharedViewModel,
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val downloadingIds by sharedViewModel.downloadingIds.collectAsState()
     val song = uiState.currentSong
+    val context = LocalContext.current
+
+    var showTimerDialog by remember { mutableStateOf(false) }
+    var isCustomTime by remember { mutableStateOf(false) }
+    var customMinutes by remember { mutableStateOf("") }
+
+    var dominantColor by remember { mutableStateOf(Color(0xFF1A1A1A)) }
+    val animatedBackground by animateColorAsState(targetValue = dominantColor, label = "bg_color")
 
     val artworkScale by animateFloatAsState(
         targetValue = if (uiState.isPlaying) 1f else 0.92f,
@@ -51,21 +77,16 @@ fun NowPlayingScreen(
         label = "artwork_scale"
     )
 
-    // 👇 LYRICS PARSING LOGIC 👇
-    // Ye line server se aaye hue text ko list mein tod degi
-    val parsedLyrics = remember(uiState.lyrics) { parseLrc(uiState.lyrics ?: "") }
     val listState = rememberLazyListState()
 
-    // Pata karo ki gaane ke time ke hisaab se abhi kaunsi line chal rahi hai
-    val currentLineIndex = remember(uiState.currentPosition, parsedLyrics) {
-        val index = parsedLyrics.indexOfLast { it.timeMs <= uiState.currentPosition }
-        if (index != -1) index else 0
+    LaunchedEffect(song?.id) {
+        if (song == null) return@LaunchedEffect
+        dominantColor = Color(0xFF1A1A1A)
     }
 
-    // Jaise hi line change hogi, screen apne aap wahan scroll ho jayegi
-    LaunchedEffect(currentLineIndex) {
-        if (parsedLyrics.isNotEmpty() && parsedLyrics[0].timeMs != -1L) {
-            listState.animateScrollToItem(currentLineIndex, scrollOffset = -300)
+    LaunchedEffect(uiState.currentLyricIndex) {
+        if (uiState.parsedLyrics.isNotEmpty() && uiState.parsedLyrics[0].timeMs != -1L && !listState.isScrollInProgress) {
+            listState.animateScrollToItem(uiState.currentLyricIndex, scrollOffset = -300)
         }
     }
 
@@ -75,7 +96,7 @@ fun NowPlayingScreen(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.surface,
+                        animatedBackground.copy(alpha = 0.6f),
                         MaterialTheme.colorScheme.background
                     )
                 )
@@ -97,8 +118,25 @@ fun NowPlayingScreen(
                     Icon(Icons.Default.KeyboardArrowDown, "Back", modifier = Modifier.size(32.dp))
                 }
                 Text("Now Playing", style = MaterialTheme.typography.titleMedium)
-                IconButton(onClick = viewModel::toggleLyrics) {
-                    Icon(Icons.Default.Lyrics, "Lyrics", tint = if (uiState.showLyrics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (uiState.sleepTimerRemaining != null) {
+                        Text(
+                            text = viewModel.formatDuration(uiState.sleepTimerRemaining!!),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+
+                    // Share Button (Upar Top Bar Mein)
+                    IconButton(onClick = { song?.let { shareSong(context, it) } }) {
+                        Icon(Icons.Default.Share, "Share", tint = MaterialTheme.colorScheme.onSurface)
+                    }
+
+                    IconButton(onClick = viewModel::toggleLyrics) {
+                        Icon(Icons.Default.Lyrics, "Lyrics", tint = if (uiState.showLyrics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                    }
                 }
             }
 
@@ -107,30 +145,30 @@ fun NowPlayingScreen(
             AnimatedContent(
                 targetState = uiState.showLyrics,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "art_lyrics_transition"
+                label = "art_lyrics_transition",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
             ) { showLyrics ->
                 if (showLyrics) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
+                            .fillMaxSize()
                             .clip(RoundedCornerShape(20.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                         contentAlignment = Alignment.Center
                     ) {
                         when {
                             uiState.isLyricsLoading -> CircularProgressIndicator()
                             uiState.lyricsError != null -> Text(uiState.lyricsError ?: "Lyrics nahi mile")
-                            parsedLyrics.isNotEmpty() -> {
-                                // 👇 AUTO SCROLLING LYRICS UI 👇
+                            uiState.parsedLyrics.isNotEmpty() -> {
                                 LazyColumn(
                                     state = listState,
                                     modifier = Modifier.fillMaxSize().padding(16.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    itemsIndexed(parsedLyrics) { index, line ->
-                                        // Highlight condition: Current line ho aur wo synced format mein ho
-                                        val isActive = index == currentLineIndex && line.timeMs != -1L
+                                    itemsIndexed(uiState.parsedLyrics) { index, line ->
+                                        val isActive = index == uiState.currentLyricIndex && line.timeMs != -1L
 
                                         Text(
                                             text = line.text,
@@ -150,20 +188,47 @@ fun NowPlayingScreen(
                         model = song?.artworkUrl,
                         contentDescription = song?.title,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
+                            .fillMaxSize()
                             .graphicsLayer { scaleX = artworkScale; scaleY = artworkScale }
                             .clip(RoundedCornerShape(20.dp)),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Crop,
+                        onState = { state ->
+                            if (state is AsyncImagePainter.State.Success) {
+                                val bitmap = (state.result.drawable as? BitmapDrawable)?.bitmap
+                                bitmap?.let {
+                                    Palette.from(it).generate { palette ->
+                                        val rgb = palette?.dominantSwatch?.rgb
+                                            ?: palette?.mutedSwatch?.rgb
+                                            ?: palette?.vibrantSwatch?.rgb
+                                        rgb?.let { color -> dominantColor = Color(color) }
+                                    }
+                                }
+                            }
+                        }
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(song?.title ?: "Koi song nahi", style = MaterialTheme.typography.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(song?.artist ?: "", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(song?.title ?: "Koi song nahi", style = MaterialTheme.typography.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(song?.artist ?: "", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+
+                IconButton(onClick = viewModel::toggleLike) {
+                    Icon(
+                        imageVector = if (uiState.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Like",
+                        tint = if (uiState.isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -181,58 +246,199 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = viewModel::togglePlaybackMode) {
-                    Icon(
-                        when (uiState.playbackMode) { PlaybackMode.SHUFFLE -> Icons.Default.Shuffle; PlaybackMode.REPEAT_ONE -> Icons.Default.RepeatOne; else -> Icons.Default.Repeat },
-                        "Mode", tint = if (uiState.playbackMode != PlaybackMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
+            // Main Controls
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = viewModel::togglePlaybackMode) {
+                        Icon(
+                            when (uiState.playbackMode) {
+                                PlaybackMode.SHUFFLE -> Icons.Default.Shuffle;
+                                PlaybackMode.REPEAT_ONE -> Icons.Default.RepeatOne;
+                                else -> Icons.Default.Repeat
+                            },
+                            "Mode", tint = if (uiState.playbackMode != PlaybackMode.NONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    IconButton(onClick = viewModel::previous) { Icon(Icons.Default.SkipPrevious, null, modifier = Modifier.size(40.dp)) }
+
+                    Box(
+                        modifier = Modifier.size(72.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (uiState.isBuffering) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(40.dp),
+                                strokeWidth = 3.dp
+                            )
+                        } else {
+                            IconButton(onClick = viewModel::playPause) {
+                                Icon(
+                                    if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    IconButton(onClick = viewModel::next) { Icon(Icons.Default.SkipNext, null, modifier = Modifier.size(40.dp)) }
+
+                    // Download Button
+                    if (song != null && !song.isLocal) {
+                        IconButton(onClick = { sharedViewModel.downloadSong(song) }) {
+                            val isDownloading = downloadingIds.contains(song.id)
+                            when {
+                                isDownloading -> CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                song.isDownloaded -> Icon(
+                                    imageVector = Icons.Default.DownloadDone,
+                                    contentDescription = "Downloaded",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                else -> Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Download",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        Box(modifier = Modifier.size(48.dp))
+                    }
                 }
-                IconButton(onClick = viewModel::previous) { Icon(Icons.Default.SkipPrevious, null, modifier = Modifier.size(40.dp)) }
-                Box(modifier = Modifier.size(72.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-                    IconButton(onClick = viewModel::playPause) { Icon(if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(40.dp)) }
-                }
-                IconButton(onClick = viewModel::next) { Icon(Icons.Default.SkipNext, null, modifier = Modifier.size(40.dp)) }
-                Box(modifier = Modifier.size(48.dp))
             }
         }
+    }
+
+    // Timer Dialog
+    if (showTimerDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showTimerDialog = false
+                isCustomTime = false
+                customMinutes = ""
+            },
+            title = { Text(if (isCustomTime) "Custom Time Set Karo" else "Sleep Timer Set Karo") },
+            text = {
+                if (isCustomTime) {
+                    Column {
+                        OutlinedTextField(
+                            value = customMinutes,
+                            onValueChange = { newValue ->
+                                if (newValue.all { it.isDigit() }) {
+                                    customMinutes = newValue
+                                }
+                            },
+                            label = { Text("Kitne minute? (e.g. 45)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    Column {
+                        val options = listOf("Off" to 0, "15 Minutes" to 15, "30 Minutes" to 30, "60 Minutes" to 60)
+                        options.forEach { (label, minutes) ->
+                            TextButton(
+                                onClick = {
+                                    viewModel.setSleepTimer(minutes)
+                                    showTimerDialog = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(label, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                        TextButton(
+                            onClick = { isCustomTime = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Custom Time...", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (isCustomTime) {
+                    Button(onClick = {
+                        val mins = customMinutes.toIntOrNull() ?: 0
+                        viewModel.setSleepTimer(mins)
+                        showTimerDialog = false
+                        isCustomTime = false
+                        customMinutes = ""
+                    }) {
+                        Text("Set Timer")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    if (isCustomTime) {
+                        isCustomTime = false
+                        customMinutes = ""
+                    } else {
+                        showTimerDialog = false
+                    }
+                }) {
+                    Text(if (isCustomTime) "Back" else "Cancel")
+                }
+            }
+        )
     }
 }
 
-// ==========================================
-// 👇 YE RAHI PARSER CLASS AUR FUNCTION 👇
-// Ise yahi file ke sabse neeche rehne dena
-// ==========================================
-
-data class LyricLine(val timeMs: Long, val text: String)
-
-fun parseLrc(lrc: String): List<LyricLine> {
-    if (lrc.isBlank()) return emptyList()
-
-    val lines = mutableListOf<LyricLine>()
-    val regex = Regex("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)")
-
-    lrc.lines().forEach { line ->
-        val match = regex.find(line)
-        if (match != null) {
-            val min = match.groupValues[1].toLong()
-            val sec = match.groupValues[2].toLong()
-            val msPart = match.groupValues[3]
-            // Agar millisecond 2 digit ka hai toh use 3 digit banate hain
-            val ms = if (msPart.length == 2) msPart.toLong() * 10 else msPart.toLong()
-            val text = match.groupValues[4].trim()
-            val totalMs = min * 60000 + sec * 1000 + ms
-
-            if (text.isNotEmpty()) {
-                lines.add(LyricLine(totalMs, text))
+// Share karne ka logic
+// Share karne ka logic (Ab Link ke sath!)
+fun shareSong(context: Context, song: Song) {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        if ((song.isDownloaded || song.isLocal) && song.localPath != null) {
+            val file = File(song.localPath!!)
+            if (file.exists()) {
+                // Agar downloaded hai toh seedha Audio File bhejega (Premium Feature 🔥)
+                type = "audio/*"
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                // Sath me text bhi bhejega (WhatsApp wagaira ke liye)
+                putExtra(Intent.EXTRA_TEXT, "Mera favourite gaana suno: ${song.title} by ${song.artist}")
+            } else {
+                shareAsTextWithLink(this, song)
             }
+        } else {
+            shareAsTextWithLink(this, song)
         }
     }
+    context.startActivity(Intent.createChooser(shareIntent, "Share Song via"))
+}
 
-    // Agar gaane mein synced (time wale) lyrics nahi hain, toh usko normal text ki tarah padh lo
-    if (lines.isEmpty() && lrc.isNotBlank()) {
-        return lrc.lines().filter { it.isNotBlank() }.map { LyricLine(-1L, it.trim()) }
-    }
+// Online songs ke liye Text + Direct Audio Link
+private fun shareAsTextWithLink(intent: Intent, song: Song) {
+    intent.type = "text/plain"
 
-    return lines
+    // Yahan song.streamUrl gaane ka direct link hai (jispar click karke browser me play ho jayega)
+    val shareText = """
+        🎵 MusicPlayer pe mast gaana suno!
+        
+        🎧 Title: ${song.title}
+        🎤 Artist: ${song.artist}
+        
+        🔗 Direct Link: ${song.streamUrl}
+    """.trimIndent()
+
+    intent.putExtra(Intent.EXTRA_TEXT, shareText)
 }

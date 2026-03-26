@@ -26,16 +26,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.musicplayer.presentation.ui.components.SongCard
 import com.example.musicplayer.presentation.ui.components.SongItem
 import com.example.musicplayer.presentation.ui.components.SongListShimmer
 import com.example.musicplayer.presentation.SharedViewModel
+import kotlinx.coroutines.delay
 
 @Composable
 fun HomeScreen(
@@ -48,6 +51,16 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val downloadingIds by sharedViewModel.downloadingIds.collectAsState()
     val recentlyPlayed by viewModel.recentlyPlayed.collectAsState()
+
+    // 👇 NAYA MAGIC: Auto-Scan! Agar error hai, toh har 3 second mein khud check karega.
+    LaunchedEffect(uiState.error) {
+        if (uiState.error != null) {
+            while (true) {
+                delay(3000L) // 3 second wait karega
+                viewModel.retry() // Khud button daba dega
+            }
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         when {
@@ -62,7 +75,7 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Internet nahi hai", style = MaterialTheme.typography.headlineMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Internet connection check karo\naur dobara try karo", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text("Internet connection check karo\naur dobara try karo", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(onClick = { viewModel.retry() }, shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))

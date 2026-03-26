@@ -49,7 +49,11 @@ fun MusicNavGraph(
         }
 
         composable(route = Screen.Search.route) {
-            SearchScreen(onSongClick = { navController.navigate(Screen.NowPlaying.route) }, sharedViewModel = sharedViewModel)
+            SearchScreen(
+                onSongClick = { navController.navigate(Screen.NowPlaying.route) },
+                sharedViewModel = sharedViewModel,
+                navController = navController
+            )
         }
 
         composable(route = Screen.Library.route) {
@@ -64,7 +68,7 @@ fun MusicNavGraph(
             DownloadsScreen(onSongClick = { navController.navigate(Screen.NowPlaying.route) })
         }
 
-        // 👇 WAPAS AAGAYA NowPlaying Navigation ke andar
+        // 👇 YAHAN CHANGES HUE HAIN: NowPlayingScreen mein sharedViewModel pass kiya hai
         composable(
             route = Screen.NowPlaying.route,
             enterTransition = {
@@ -86,7 +90,10 @@ fun MusicNavGraph(
                 )
             }
         ) {
-            NowPlayingScreen(onBackClick = { navController.popBackStack() })
+            NowPlayingScreen(
+                onBackClick = { navController.popBackStack() },
+                sharedViewModel = sharedViewModel // ✅ Naya add kiya
+            )
         }
 
         composable(

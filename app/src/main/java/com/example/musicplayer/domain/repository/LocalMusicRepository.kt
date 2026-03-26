@@ -5,16 +5,13 @@ import com.example.musicplayer.domain.model.Song
 import kotlinx.coroutines.flow.Flow
 
 interface LocalMusicRepository {
-
-    // Device scan karke saare songs lao
     fun getLocalSongs(): Flow<Resource<List<Song>>>
-
-    // Recently played songs
     fun getRecentlyPlayed(): Flow<List<Song>>
-
-    // Recently played me add karo
     suspend fun addToRecentlyPlayed(song: Song)
-
-    // Recently played clear karo
     suspend fun clearRecentlyPlayed()
+
+    // 👇 NAYA: Liked Songs ke naye functions
+    fun getLikedSongs(): Flow<List<Song>>
+    fun isSongLiked(songId: String): Flow<Boolean>
+    suspend fun toggleLikeSong(song: Song)
 }

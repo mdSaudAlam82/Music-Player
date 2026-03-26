@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.example.musicplayer.presentation.ui.theme
 
 import android.app.Activity
@@ -38,8 +40,10 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun MusicPlayerTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    // App ko hamesha Dark Mode mein rakhenge
+    darkTheme: Boolean = true,
+    // Dynamic colors off kar denge taaki tumhare custom colors use hon
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
