@@ -30,9 +30,9 @@ object MediaModule {
         @ApplicationContext context: Context,
         audioAttributes: AudioAttributes
     ): ExoPlayer {
+        // Wapas simple aur fast ExoPlayer par aa gaye (Red errors removed)
         return ExoPlayer.Builder(context)
-            // 👇 YAHAN FALSE KARNA HAI taaki hum manually focus control kar sakein
-            .setAudioAttributes(audioAttributes, false)
+            .setAudioAttributes(audioAttributes, false) // Call focus manual handle ke liye false
             .setHandleAudioBecomingNoisy(true)
             .build()
     }

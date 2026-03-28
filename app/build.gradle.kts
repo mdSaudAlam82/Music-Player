@@ -24,7 +24,7 @@ android {
 
         ndk {
             // 👇 OPTIMIZATION: Sirf modern 64-bit architecture rakha hai (App size aur kam hoga)
-            abiFilters.add("arm64-v8a")
+            abiFilters.addAll(arrayOf("arm64-v8a", "armeabi-v7a"))
             // Agar Play Store par error aaye purane phones ke liye, tabhi "armeabi-v7a" add karna. Par aayega nahi.
         }
     }

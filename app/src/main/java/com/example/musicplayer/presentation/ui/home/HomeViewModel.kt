@@ -20,9 +20,7 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val searchSongsUseCase: SearchSongsUseCase,
     private val getRecentlyPlayedUseCase: GetRecentlyPlayedUseCase,
-    // PlayerController yahan rakhna zaruri hai kyunki HomeScreen se song play hota hai
-    // Lekin playerState ab SharedViewModel se lenge (MainActivity mein)
-    private val playerController: PlayerController
+    val playerController: PlayerController
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -35,6 +33,18 @@ class HomeViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    // 👇 NAYA: Alag-alag moods aur categories ki list
+    private val trendingQueries = listOf(
+        "trending hindi",
+        "latest bollywood",
+        "top 50 hindi",
+        "viral songs",
+        "lofi chill hindi",
+        "punjabi hits",
+        "new romantic hindi",
+        "arijit singh hits"
+    )
+
     init {
         loadTrendingSongs()
     }
@@ -44,8 +54,11 @@ class HomeViewModel @Inject constructor(
     }
 
     fun loadTrendingSongs() {
+        // 👇 NAYA: Har baar ek random category uthayega
+        val randomQuery = trendingQueries.random()
+
         viewModelScope.launch {
-            searchSongsUseCase("trending hindi songs", limit = 20).collect { result ->
+            searchSongsUseCase(randomQuery, limit = 20).collect { result ->
                 when (result) {
                     is Resource.Loading -> _uiState.update {
                         it.copy(isLoading = true, error = null)

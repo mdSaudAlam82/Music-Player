@@ -45,6 +45,9 @@ class PlayerController @Inject constructor(
     private var sleepTimerJob: Job? = null
     private var retryCount = 0
 
+    // Cancels ongoing API fetch when user quickly changes song
+    private var currentFetchJob: Job? = null
+
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var wasPlayingBeforeCall = false
 
@@ -159,8 +162,19 @@ class PlayerController @Inject constructor(
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 retryCount = 0
-                _playerState.update { it.copy(currentIndex = player.currentMediaItemIndex) }
-                updateCurrentSong()
+                val newIndex = player.currentMediaItemIndex
+                if (newIndex != _playerState.value.currentIndex) {
+                    _playerState.update {
+                        it.copy(
+                            currentIndex = newIndex,
+                            currentPosition = 0L,
+                            duration = 0L,
+                            // Ensure fast reset to prevent laggy old UI
+                            isBuffering = true
+                        )
+                    }
+                    updateCurrentSong()
+                }
             }
         })
     }
@@ -172,50 +186,81 @@ class PlayerController @Inject constructor(
         val fullQueue = if (queue.isEmpty()) listOf(song) else queue
         val startIndex = fullQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
 
-        scope.launch {
-            if (song.isDownloaded || song.isLocal) {
-                playDirectly(song, fullQueue, startIndex)
-                return@launch
-            }
+        // UI instantly reset
+        _playerState.update {
+            it.copy(
+                currentSong = song,
+                currentPosition = 0L,
+                duration = 0L,
+                isLoading = true,
+                isBuffering = true
+            )
+        }
 
-            _playerState.update { it.copy(isLoading = true, isBuffering = true) }
+        // Cancel previous pending network load to prioritize user's new click immediately
+        currentFetchJob?.cancel()
+
+        // FAST PATH: Agar link already available hai toh network delay ko completely bypass karo
+        if (song.isDownloaded || song.isLocal || song.streamUrl.isNotBlank()) {
+            playDirectly(song, fullQueue, startIndex)
+            return
+        }
+
+        // SLOW PATH: Agar link nahi hai (sirf playlists me hota hai), toh API fetch ko async chalao.
+        currentFetchJob = scope.launch {
             try {
                 musicRepository.getSongById(song.id).collect { result ->
                     if (result is Resource.Success) {
                         playDirectly(result.data ?: song, fullQueue, startIndex)
                     } else if (result is Resource.Error) {
-                        // Agar fail hua, toh spinner band karo
-                        _playerState.update { it.copy(isLoading = false, isBuffering = false) }
+                        playDirectly(song, fullQueue, startIndex)
                     }
                 }
             } catch (e: Exception) {
-                _playerState.update { it.copy(isLoading = false, isBuffering = false) }
+                playDirectly(song, fullQueue, startIndex)
             }
         }
     }
 
     private fun playDirectly(song: Song, queue: List<Song>, startIndex: Int) {
-        // 👇 NAYA LOGIC: Queue me current song ko fresh song (jisme valid link hai) se replace karo
+        val currentQueueIds = _playerState.value.queue.map { it.id }
+        val newQueueIds = queue.map { it.id }
+
+        // Smart Queue Detection
+        val isSameQueue = currentQueueIds == newQueueIds && player.mediaItemCount == queue.size
+
         val updatedQueue = queue.toMutableList()
         if (startIndex in updatedQueue.indices) {
             updatedQueue[startIndex] = song
         }
 
-        val mediaItems = updatedQueue.map { it.toMediaItem() }
+        if (isSameQueue) {
+            // Seek ko fast banane ke liye Media Item update sirf tab karo jab actually URL change hua ho
+            val newItem = song.toMediaItem()
+            val oldItem = player.getMediaItemAt(startIndex)
 
-        // Ensure ExoPlayer is clean before setting new items to avoid weird looping states
-        player.setMediaItems(mediaItems, startIndex, 0L)
+            if (oldItem.localConfiguration?.uri != newItem.localConfiguration?.uri) {
+                player.replaceMediaItem(startIndex, newItem)
+            }
+            player.seekTo(startIndex, 0L)
+        } else {
+            // Nayi list banana heavy ho sakta hai, par isko humne UI reset hone ke baad chalaya hai
+            val mediaItems = updatedQueue.map { it.toMediaItem() }
+            player.setMediaItems(mediaItems, startIndex, 0L)
+        }
+
+        // Ye immediately play function start karega
         player.prepare()
         player.play()
 
         _playerState.update {
             it.copy(
                 currentSong = song,
-                queue = updatedQueue, // ✅ Nayi update ki hui queue pass karo
+                queue = updatedQueue,
                 currentIndex = startIndex,
                 isPlaying = true,
                 isLoading = false,
-                isBuffering = false
+                isBuffering = false // Buffering ab player k hud handle karega
             )
         }
     }
@@ -281,8 +326,15 @@ class PlayerController @Inject constructor(
     private fun updateCurrentSong() {
         val currentIndex = player.currentMediaItemIndex
         val queue = _playerState.value.queue
-        if (currentIndex < queue.size) {
-            _playerState.update { it.copy(currentSong = queue[currentIndex]) }
+        if (currentIndex in queue.indices) {
+            val nextSong = queue[currentIndex]
+            if (nextSong.streamUrl.isBlank() && !nextSong.isLocal && !nextSong.isDownloaded) {
+                playSong(nextSong, queue)
+            } else {
+                _playerState.update {
+                    it.copy(currentSong = nextSong)
+                }
+            }
         }
     }
 
@@ -340,16 +392,8 @@ class PlayerController @Inject constructor(
 
     private fun Song.toMediaItem(): MediaItem {
         val uri = when {
-            isDownloaded && !localPath.isNullOrBlank() -> {
-                val file = File(localPath)
-                if (file.exists()) android.net.Uri.fromFile(file)
-                else android.net.Uri.parse(streamUrl)
-            }
-            isLocal && !localPath.isNullOrBlank() -> android.net.Uri.parse(localPath)
-            else -> {
-                // Return an empty URI parsing if it's blank to trigger onPlayerError naturally
-                android.net.Uri.parse(streamUrl)
-            }
+            isDownloaded && !localPath.isNullOrBlank() -> android.net.Uri.fromFile(File(localPath))
+            else -> android.net.Uri.parse(streamUrl.ifBlank { "http://empty" })
         }
         return MediaItem.Builder()
             .setUri(uri)

@@ -28,43 +28,56 @@ class PlayerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             playerController.playerState.collect { playerState ->
-                val isNewSong = playerState.currentSong?.id != _uiState.value.currentSong?.id
+                val currentSongId = _uiState.value.currentSong?.id
+                val newSongId = playerState.currentSong?.id
+                val isNewSong = newSongId != null && newSongId != currentSongId
 
-                // 👇 NAYA FIX: Naya gaana bajne par check karo (aur purana overwrite mat karo)
-                if (isNewSong && playerState.currentSong != null) {
+                if (isNewSong) {
+                    // Turant UI update karo naye gaane ke liye bina wait kiye
+                    _uiState.update {
+                        it.copy(
+                            currentSong = playerState.currentSong,
+                            currentPosition = 0L, // Reset timer instantly
+                            duration = 0L, // Reset duration instantly
+                            lyrics = null,
+                            parsedLyrics = emptyList(),
+                            lyricsError = null,
+                            showLyrics = false,
+                            isLyricsLoading = false,
+                            currentLyricIndex = 0,
+                            isLiked = false // Default false, DB se check hone tak
+                        )
+                    }
+
+                    // Background me like status check karo
                     viewModelScope.launch {
-                        localMusicRepository.isSongLiked(playerState.currentSong.id).collect { liked ->
-                            _uiState.update { it.copy(isLiked = liked) }
+                        playerState.currentSong?.let { song ->
+                            localMusicRepository.isSongLiked(song.id).collect { liked ->
+                                _uiState.update { it.copy(isLiked = liked) }
+                            }
                         }
                     }
-                }
+                } else {
+                    // Agar same song hai, toh bas player ki states update karo
+                    val parsed = _uiState.value.parsedLyrics
+                    val pos = playerState.currentPosition
+                    val newIndex = if (parsed.isNotEmpty()) {
+                        val idx = parsed.indexOfLast { it.timeMs <= pos }
+                        if (idx != -1) idx else 0
+                    } else 0
 
-                val parsed = _uiState.value.parsedLyrics
-                val pos = playerState.currentPosition
-                val newIndex = if (parsed.isNotEmpty()) {
-                    val idx = parsed.indexOfLast { it.timeMs <= pos }
-                    if (idx != -1) idx else 0
-                } else 0
-
-                _uiState.update {
-                    it.copy(
-                        currentSong = playerState.currentSong,
-                        isPlaying = playerState.isPlaying,
-                        currentPosition = pos,
-                        duration = playerState.duration,
-                        playbackMode = playerState.playbackMode,
-                        lyrics = if (isNewSong) null else it.lyrics,
-                        parsedLyrics = if (isNewSong) emptyList() else it.parsedLyrics,
-                        lyricsError = if (isNewSong) null else it.lyricsError,
-                        showLyrics = if (isNewSong) false else it.showLyrics,
-                        isLyricsLoading = if (isNewSong) false else it.isLyricsLoading,
-                        currentLyricIndex = if (isNewSong) 0 else newIndex,
-                        sleepTimerRemaining = playerState.sleepTimerRemaining,
-                        isBuffering = playerState.isBuffering,
-                        isWaitingForFocus = playerState.isWaitingForFocus,
-                        // 👇 NAYA FIX: Ye logic miss ho rahi thi UI State update ke main block mein
-                        isLiked = if (isNewSong) false else it.isLiked
-                    )
+                    _uiState.update {
+                        it.copy(
+                            isPlaying = playerState.isPlaying,
+                            currentPosition = pos,
+                            duration = playerState.duration,
+                            playbackMode = playerState.playbackMode,
+                            currentLyricIndex = newIndex,
+                            sleepTimerRemaining = playerState.sleepTimerRemaining,
+                            isBuffering = playerState.isBuffering,
+                            isWaitingForFocus = playerState.isWaitingForFocus
+                        )
+                    }
                 }
             }
         }
